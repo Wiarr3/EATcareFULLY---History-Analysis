@@ -9,6 +9,11 @@ import random
 from datetime import datetime, timedelta
 import pandas as pd
 
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PDF_DIR = os.path.join(BASE_DIR, "pdf")
+JPG_DIR = os.path.join(BASE_DIR, "jpg")
+
 class ProductReportGenerator:
     def __init__(self, product_entries, unique_id, month, year=datetime.now().year):
         self.product_entries = product_entries
@@ -23,10 +28,10 @@ class ProductReportGenerator:
         return monthly_df
 
     def get_image_path(self, filename):
-        return os.path.join("jpg", f"{self.unique_id}_{filename}")
+        return os.path.join(JPG_DIR, f"{self.unique_id}_{filename}")
 
     def get_pdf_path(self, filename):
-        return os.path.join("pdf", f"{self.unique_id}_{filename}")
+        return os.path.join(PDF_DIR, f"{self.unique_id}_{filename}")
 
     def add_section_title(self, pdf, title):
         pdf.set_font("Arial", "B", 14)

@@ -10,10 +10,17 @@ from pydantic import BaseModel
 
 from report_generator import ProductReportGenerator
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PDF_DIR = os.path.join(BASE_DIR, "pdf")
+JPG_DIR = os.path.join(BASE_DIR, "jpg")
+
+os.makedirs(PDF_DIR, exist_ok=True)
+
 class ProductEntry(BaseModel):
     code: str
     date: datetime
     quantity: int = 1
+
 class AnalyzeProductsRequest(BaseModel):
     products: List[ProductEntry]
 
@@ -30,7 +37,7 @@ async def analyze_products(products: AnalyzeProductsRequest):
     report_generator.generate_pdf_report()
 
     pdf_filename = f"{unique_id}_report.pdf"
-    pdf_path = os.path.join("pdf", pdf_filename)
+    pdf_path = os.path.join(PDF_DIR, pdf_filename)
 
     if not os.path.exists(pdf_path):
         raise HTTPException(status_code=404, detail="PDF file not found")
@@ -39,24 +46,22 @@ async def analyze_products(products: AnalyzeProductsRequest):
 
 EXPIRATION_TIME = timedelta(minutes=10)
 
-
 def delete_old_files():
-    print("check files for delete")
+    print("Checking files for deletion...")
     now = datetime.now()
-    for filename in os.listdir("pdf"):
-        file_path = os.path.join("pdf", filename)
+    for folder in [PDF_DIR, JPG_DIR]:
+        for filename in os.listdir(folder):
+            file_path = os.path.join(folder, filename)
 
-        if os.path.isfile(file_path):
-            file_modified_time = datetime.fromtimestamp(os.path.getmtime(file_path))
-            if now - file_modified_time > EXPIRATION_TIME:
-                try:
-                    os.remove(file_path)
-                    print(f"Deleted old file: {filename}")
-                except Exception as e:
-                    print(f"Error deleting file {filename}: {e}")
-
+            if os.path.isfile(file_path):
+                file_modified_time = datetime.fromtimestamp(os.path.getmtime(file_path))
+                if now - file_modified_time > EXPIRATION_TIME:
+                    try:
+                        os.remove(file_path)
+                        print(f"Deleted old file: {filename}")
+                    except Exception as e:
+                        print(f"Error deleting file {filename}: {e}")
 
 scheduler = BackgroundScheduler()
 scheduler.add_job(delete_old_files, "interval", minutes=5)
 scheduler.start()
-
