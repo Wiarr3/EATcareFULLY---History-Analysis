@@ -2,19 +2,31 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
+from src.utils import days_passed_in_month
 
-def total_macros(df):
+
+def total_macros(df, preferences, month, year):
     try:
         protein_total = df['proteins_total'].sum()
         fat_total = df['fat_total'].sum()
         carbs_total = df['carbohydrates_total'].sum()
-        return protein_total, fat_total, carbs_total
+
+        days_passed = days_passed_in_month(month, year)
+
+        if days_passed > 0:
+            protein_daily_deviation = (protein_total - preferences.protein_threshold) / days_passed
+            fat_daily_deviation = (fat_total - preferences.fat_threshold) / days_passed
+            carbs_daily_deviation = (carbs_total - preferences.carbon_threshold) / days_passed
+        else:
+            protein_daily_deviation = 0
+            fat_daily_deviation = 0
+            carbs_daily_deviation = 0
+        return protein_total, protein_daily_deviation, fat_total, fat_daily_deviation, carbs_total, carbs_daily_deviation
     except Exception as e:
         print(f"Error calculating total macros: {e}")
 
 
-def plot_macros(df, freq='D', filename_prefix=""):
-
+def plot_macros(df, preferences, freq='D', filename_prefix=""):
     try:
         df = df.drop(columns=['id'], errors='ignore')
         df['date'] = pd.to_datetime(df['date'])
@@ -48,11 +60,36 @@ def plot_macros(df, freq='D', filename_prefix=""):
             plt.show()
 
         for macro in ['proteins_total', 'carbohydrates_total', 'fat_total']:
+            if macro == 'proteins_total':
+                threshold = preferences.protein_threshold
+            elif macro == 'carbohydrates_total':
+                threshold = preferences.carbon_threshold
+            elif macro == 'fat_total':
+                threshold = preferences.fat_threshold
+
+            upper_limit = threshold * 1.1
+            lower_limit = threshold * 0.9
+
+            colors = ['green' if lower_limit <= value <= upper_limit else 'red' for value in df[macro]]
+
             fig, ax = plt.subplots(figsize=(12, 6))
-            df[macro].plot(kind='line', ax=ax, title=f"{macro.split('_')[0].capitalize()} Consumption Over {freq_str}")
+            df[macro].plot(
+                kind='bar',
+                color=colors,
+                ax=ax,
+                title=f"{macro.split('_')[0].capitalize()} Consumption Over {freq_str}"
+            )
+
+            ax.axhline(threshold, color='green', linestyle='-', linewidth=2, label=f'Threshold ({threshold:.2f} g)')
+            ax.axhline(upper_limit, color='red', linestyle='--', linewidth=1,
+                       label=f'Upper Limit ({upper_limit:.2f} g)')
+            ax.axhline(lower_limit, color='red', linestyle='--', linewidth=1,
+                       label=f'Lower Limit ({lower_limit:.2f} g)')
+
             ax.set_ylabel("Consumption (g)")
             ax.set_xlabel("Date")
             ax.xaxis.set_major_formatter(x_format)
+            ax.legend()
             plt.xticks(rotation=45)
 
             if filename_prefix:
@@ -65,6 +102,8 @@ def plot_macros(df, freq='D', filename_prefix=""):
 
     except Exception as e:
         print(f"Error plotting macros: {e}")
+
+
 
 def list_days_with_deviation(df, macro='proteins_total', threshold=1.5):
     try:
@@ -115,7 +154,7 @@ def top_macro_products(df, macro_column='proteins_total', top_n=5):
         print(f"Error getting top products for {macro_column}: {e}")
 
 
-def calorie_stats(df, month, year):
+def calorie_stats(df, preferences, month, year):
 
     try:
         df = df.drop(columns=['id'], errors='ignore')
@@ -128,10 +167,17 @@ def calorie_stats(df, month, year):
 
         std_calories = daily_calories.std()
 
+        days_passed = days_passed_in_month(month, year)
+
+        if days_passed > 0:
+            daily_calorie_deviation = (total_calories - preferences.calorie_threshold) / days_passed
+        else:
+            daily_calorie_deviation = 0
+
         weekly_calories = daily_calories.resample('W').sum()
         weekly_calories_df = weekly_calories.reset_index().rename(columns={'date': 'Week Start', 'energy_kcal_total': 'Calories'})
 
-        return total_calories, std_calories, weekly_calories_df
+        return total_calories, std_calories, daily_calorie_deviation, weekly_calories_df
 
     except Exception as e:
         print(f"Error calculating calorie stats: {e}")
@@ -154,7 +200,7 @@ def plot_calorie_consumption_over_time(df, freq='D', filename=None):
             x_format = mdates.DateFormatter('%B')
 
         fig, ax = plt.subplots(figsize=(12, 6))
-        df['energy_kcal_total'].plot(kind='line', ax=ax, title=f"Calorie Consumption Over {freq_str}")
+        df['energy_kcal_total'].plot(kind='bar', ax=ax, title=f"Calorie Consumption Over {freq_str}")
         ax.set_ylabel("Calories")
         ax.set_xlabel(f"Over {freq_str}")
         ax.xaxis.set_major_formatter(x_format)
@@ -170,25 +216,26 @@ def plot_calorie_consumption_over_time(df, freq='D', filename=None):
         print(f"Error plotting calorie consumption over time: {e}")
 
 
-def plot_calorie_limit_bar(df, freq='D', calorie_margin=300, filename=None):
+
+def plot_calorie_limit_bar(df, preferences, freq='D', filename=None):
     try:
         df = df.drop(columns=['id'], errors='ignore')
         df['date'] = pd.to_datetime(df['date'])
         daily_calories = df.set_index('date').resample(freq).sum()['energy_kcal_total']
 
-        mean_calories = daily_calories.mean()
-        upper_limit = mean_calories + calorie_margin
-        lower_limit = mean_calories - calorie_margin
+        threshold = preferences.calorie_threshold
+        upper_limit = threshold * 1.1
+        lower_limit = threshold * 0.9
 
         colors = ['green' if lower_limit <= value <= upper_limit else 'red' for value in daily_calories]
 
         fig, ax = plt.subplots(figsize=(12, 6))
         daily_calories.plot(kind='bar', color=colors, ax=ax, title="Daily Calorie Consumption with Limits")
 
-        ax.axhline(mean_calories, color='blue', linestyle='-', linewidth=1, label=f'Mean ({mean_calories:.2f} kcal)')
-        ax.axhline(upper_limit, color='orange', linestyle='--', linewidth=1,
+        ax.axhline(threshold, color='green', linestyle='-', linewidth=2, label=f'Threshold ({threshold:.2f} kcal)')
+        ax.axhline(upper_limit, color='red', linestyle='--', linewidth=1,
                    label=f'Upper Limit ({upper_limit:.2f} kcal)')
-        ax.axhline(lower_limit, color='purple', linestyle='--', linewidth=1,
+        ax.axhline(lower_limit, color='red', linestyle='--', linewidth=1,
                    label=f'Lower Limit ({lower_limit:.2f} kcal)')
         ax.set_ylabel("Calories")
         ax.set_xlabel("Date")

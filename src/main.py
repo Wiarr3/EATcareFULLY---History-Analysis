@@ -3,37 +3,58 @@ from datetime import datetime, timedelta
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
+
 from typing import List
 import uuid
 from apscheduler.schedulers.background import BackgroundScheduler
 from pydantic import BaseModel
 
-from report_generator import ProductReportGenerator
+from src.report_generator import ProductReportGenerator
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PDF_DIR = os.path.join(BASE_DIR, "pdf")
 JPG_DIR = os.path.join(BASE_DIR, "jpg")
 
 os.makedirs(PDF_DIR, exist_ok=True)
+os.makedirs(JPG_DIR, exist_ok=True)
 
 class ProductEntry(BaseModel):
     code: str
     date: datetime
     quantity: int = 1
 
+class Preferences(BaseModel):
+    calorie_threshold: int
+    protein_threshold: int
+    carbon_threshold: int
+    fat_threshold: int
+
+
 class AnalyzeProductsRequest(BaseModel):
+    month: int
+    year: int
     products: List[ProductEntry]
+    preferences: Preferences
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://localhost:8081"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 def read_root():
     return {"It works"}
 
-@app.post("/start/")
+@app.post("/analyze/")
 async def analyze_products(products: AnalyzeProductsRequest):
     unique_id = uuid.uuid4()
-    report_generator = ProductReportGenerator(products, month=11, year=2024, unique_id=unique_id)
+    report_generator = ProductReportGenerator(products, month=products.month, year=products.year, unique_id=unique_id)
     report_generator.generate_pdf_report()
 
     pdf_filename = f"{unique_id}_report.pdf"

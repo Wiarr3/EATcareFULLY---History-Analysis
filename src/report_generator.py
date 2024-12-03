@@ -1,26 +1,33 @@
-import uuid
 import os
 from fpdf import FPDF
-from analyze_data import plot_calorie_consumption_over_time, plot_macros, plot_calorie_limit_bar, plot_nutriscore, \
+from src.analyze_data import plot_calorie_consumption_over_time, plot_macros, plot_calorie_limit_bar, plot_nutriscore, \
     calorie_stats, total_macros, top_caloric_products, weekly_macros_stats, top_macro_products
-from process_data import process_data
+from src.process_data import process_data
 from dataclasses import dataclass
 import random
 from datetime import datetime, timedelta
 import pandas as pd
 
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PDF_DIR = os.path.join(BASE_DIR, "pdf")
 JPG_DIR = os.path.join(BASE_DIR, "jpg")
+
+
+def decode_text(text):
+    if not isinstance(text, str):
+        text = str(text)
+    return text.encode('latin-1', 'replace').decode('latin-1')
 
 class ProductReportGenerator:
     def __init__(self, product_entries, unique_id, month, year=datetime.now().year):
         self.product_entries = product_entries
+        self.preferences = product_entries.preferences
         self.month = month
         self.year = year
         self.df = self.filter_data_by_month(process_data(self.product_entries))
         self.unique_id = unique_id
+
+
 
     def filter_data_by_month(self, df):
         df['date'] = pd.to_datetime(df['date'])
@@ -55,7 +62,7 @@ class ProductReportGenerator:
         pdf.ln()
 
         for index, row in top_macro_df.iterrows():
-            pdf.cell(100, 10, row['name'], border=1)
+            pdf.cell(100, 10, decode_text(row['name']), border=1)
             pdf.cell(50, 10, f"{row[macro_column]:.2f}", border=1)
             pdf.cell(40, 10, f"{row['Percentage']}%", border=1)
             pdf.ln()
@@ -105,7 +112,7 @@ class ProductReportGenerator:
         pdf.ln()
 
         for product_name, calories in top_caloric_df.items():
-            pdf.cell(100, 10, product_name, border=1)
+            pdf.cell(100, 10, decode_text(product_name), border=1)
             pdf.cell(50, 10, f"{calories:.2f}", border=1)
             pdf.ln()
 
@@ -118,26 +125,22 @@ class ProductReportGenerator:
         pdf.ln(10)
 
         self.add_section_title(pdf, "Calorie Analysis")
-        total_calories, std_calories, weekly_calories_df = calorie_stats(self.df, self.month, self.year)
+        total_calories, std_calories, daily_calorie_deviation, weekly_calories_df = calorie_stats(self.df, self.preferences, self.month, self.year)
 
         pdf.set_font("Arial", "", 10)
         pdf.cell(0, 10, f"Total Calorie Consumption: {total_calories:.2f} kcal", ln=True)
         pdf.cell(0, 10, f"Calorie Consumption Standard Deviation: {std_calories:.2f} kcal", ln=True)
+        pdf.cell(0, 10, f"Daily Calorie Deviation: {daily_calorie_deviation:.2f} kcal", ln=True)
         pdf.ln(5)
 
         self.add_weekly_calories_table(pdf, weekly_calories_df)
         pdf.ln(10)
 
-        calories_image_path = self.get_image_path("calories_over_time.png")
         limits_image_path = self.get_image_path("calorie_limits.png")
 
-        plot_calorie_consumption_over_time(self.df, freq='D', filename=calories_image_path)
-        pdf.image(calories_image_path, x=10, y=170, w=180)
-        pdf.ln(90)
-
-        plot_calorie_limit_bar(self.df, freq='D', filename=limits_image_path)
+        plot_calorie_limit_bar(self.df,self.preferences, freq='D', filename=limits_image_path)
         pdf.add_page()
-        pdf.image(limits_image_path, x=10, y=30, w=180)
+        pdf.image(limits_image_path, x=10, y=20, w=180)
         pdf.ln(130)
 
         top_caloric_df = top_caloric_products(self.df)
@@ -146,7 +149,7 @@ class ProductReportGenerator:
 
         pdf.add_page()
         self.add_section_title(pdf, "Macronutrient Analysis")
-        protein_total, fat_total, carbs_total = total_macros(self.df)
+        protein_total, protein_daily_deviation, fat_total, fat_daily_deviation, carbs_total, carbs_daily_deviation = total_macros(self.df, self.preferences, self.month, self.year)
 
         weekly_macros_df = weekly_macros_stats(self.df, self.month, self.year)
         self.add_weekly_macros_table(pdf, weekly_macros_df)
@@ -154,7 +157,7 @@ class ProductReportGenerator:
 
         macros_combined_path = self.get_image_path("macros_combined.png")
         macros_prefix = self.get_image_path("macros")
-        plot_macros(self.df, freq='D', filename_prefix=macros_prefix)
+        plot_macros(self.df, self.preferences, freq='D', filename_prefix=macros_prefix)
         pdf.image(macros_combined_path, x=10, y=120, w=180)
         pdf.ln(90)
 
@@ -163,16 +166,22 @@ class ProductReportGenerator:
             'carbohydrates_total': carbs_total,
             'proteins_total': protein_total
         }
+        macro_daily_deviations = {
+            'Fat': fat_daily_deviation,
+            'Protein': protein_daily_deviation,
+            'Carbohydrates': carbs_daily_deviation
+        }
 
         for macro, macro_name in zip(['fat_total', 'carbohydrates_total', 'proteins_total'],
                                      ['Fat', 'Carbohydrates', 'Protein']):
             pdf.add_page()
             self.add_subsection_title(pdf, f"{macro_name} Analysis")
             pdf.cell(0, 10, f"Total {macro_name} Consumption: {macro_totals[macro]:.2f}g", ln=True)
-            pdf.ln(5)
+            pdf.cell(0, 10, f"Daily {macro_name} Deviation: {macro_daily_deviations[macro_name]:.2f}g", ln=True)
+            pdf.ln(10)
 
             macro_image_path = self.get_image_path(f"macros_{macro}.png")
-            pdf.image(macro_image_path, x=10, y=30, w=180)
+            pdf.image(macro_image_path, x=10, y=40, w=180)
             pdf.ln(90)
 
             top_macro_df = top_macro_products(self.df, macro_column=macro)
@@ -188,9 +197,9 @@ class ProductReportGenerator:
         pdf_path = self.get_pdf_path("report.pdf")
         pdf.output(pdf_path)
 
-        for filename in os.listdir("jpg"):
+        for filename in os.listdir(JPG_DIR):
             if filename.startswith(str(self.unique_id)):
-                os.remove(os.path.join("jpg", filename))
+                os.remove(os.path.join(JPG_DIR, filename))
 
         print(f"Report generated: {pdf_path}")
         return pdf_path
