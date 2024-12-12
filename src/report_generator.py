@@ -1,7 +1,7 @@
 import os
 from fpdf import FPDF
 from src.analyze_data import plot_calorie_consumption_over_time, plot_macros, plot_calorie_limit_bar, plot_nutriscore, \
-    calorie_stats, total_macros, top_caloric_products, weekly_macros_stats, top_macro_products
+    calorie_stats, total_macros, top_caloric_products, weekly_macros_stats, top_macro_products, generate_dietary_advice
 from src.process_data import process_data
 from dataclasses import dataclass
 import random
@@ -116,6 +116,16 @@ class ProductReportGenerator:
             pdf.cell(50, 10, f"{calories:.2f}", border=1)
             pdf.ln()
 
+    def add_dietary_advice_to_pdf(self, pdf, advice):
+        pdf.add_page()
+        pdf.set_font("Arial", "B", 14)
+        pdf.cell(0, 10, "Dietary Advice", ln=True, align="L")
+        pdf.ln(10)
+        pdf.set_font("Arial", "", 12)
+        for line in advice.split('\n'):
+            pdf.multi_cell(0, 10, line)
+            pdf.ln(2)
+
     def generate_pdf_report(self):
         pdf = FPDF()
         pdf.add_page()
@@ -125,7 +135,9 @@ class ProductReportGenerator:
         pdf.ln(10)
 
         self.add_section_title(pdf, "Calorie Analysis")
-        total_calories, std_calories, daily_calorie_deviation, weekly_calories_df = calorie_stats(self.df, self.preferences, self.month, self.year)
+        total_calories, std_calories, daily_calorie_deviation, weekly_calories_df = calorie_stats(self.df,
+                                                                                                  self.preferences,
+                                                                                                  self.month, self.year)
 
         pdf.set_font("Arial", "", 10)
         pdf.cell(0, 10, f"Total Calorie Consumption: {total_calories:.2f} kcal", ln=True)
@@ -138,7 +150,7 @@ class ProductReportGenerator:
 
         limits_image_path = self.get_image_path("calorie_limits.png")
 
-        plot_calorie_limit_bar(self.df,self.preferences, freq='D', filename=limits_image_path)
+        plot_calorie_limit_bar(self.df, self.preferences, freq='D', filename=limits_image_path)
         pdf.add_page()
         pdf.image(limits_image_path, x=10, y=20, w=180)
         pdf.ln(130)
@@ -149,7 +161,8 @@ class ProductReportGenerator:
 
         pdf.add_page()
         self.add_section_title(pdf, "Macronutrient Analysis")
-        protein_total, protein_daily_deviation, fat_total, fat_daily_deviation, carbs_total, carbs_daily_deviation = total_macros(self.df, self.preferences, self.month, self.year)
+        protein_total, protein_daily_deviation, fat_total, fat_daily_deviation, carbs_total, carbs_daily_deviation = total_macros(
+            self.df, self.preferences, self.month, self.year)
 
         weekly_macros_df = weekly_macros_stats(self.df, self.month, self.year)
         self.add_weekly_macros_table(pdf, weekly_macros_df)
@@ -188,11 +201,8 @@ class ProductReportGenerator:
             self.add_top_macro_products_table(pdf, top_macro_df, macro_name, macro_column=macro)
             pdf.ln(10)
 
-        nutriscore_image_path = self.get_image_path("nutriscore.png")
-        pdf.add_page()
-        self.add_section_title(pdf, "Nutri-Score Analysis")
-        plot_nutriscore(self.df, filename=nutriscore_image_path)
-        pdf.image(nutriscore_image_path, x=10, y=30, w=180)
+        advice = generate_dietary_advice(self.df, self.preferences, self.month, self.year)
+        self.add_dietary_advice_to_pdf(pdf, advice)
 
         pdf_path = self.get_pdf_path("report.pdf")
         pdf.output(pdf_path)
