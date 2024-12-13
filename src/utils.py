@@ -1,4 +1,5 @@
 from datetime import datetime
+from dataclasses import dataclass
 
 
 def days_passed_in_month(month: int, year: int) -> int:
@@ -12,3 +13,11 @@ def days_passed_in_month(month: int, year: int) -> int:
         return monthrange(year, month)[1]
 
     return today.day
+
+
+
+@dataclass
+class ProductEntry:
+    code: str
+    date: datetime
+    quantity: int = 1

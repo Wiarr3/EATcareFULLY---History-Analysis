@@ -1,6 +1,6 @@
 import os
 from fpdf import FPDF
-from src.analyze_data import plot_calorie_consumption_over_time, plot_macros, plot_calorie_limit_bar, plot_nutriscore, \
+from src.analyze_data import  plot_macros, plot_calorie_limit_bar, \
     calorie_stats, total_macros, top_caloric_products, weekly_macros_stats, top_macro_products, generate_dietary_advice
 from src.process_data import process_data
 from dataclasses import dataclass

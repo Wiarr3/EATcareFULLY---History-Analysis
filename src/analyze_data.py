@@ -261,20 +261,6 @@ def top_caloric_products(df, top_n=5):
         print(f"Error getting top caloric products: {e}")
 
 
-def nutriscore_stats(df):
-    try:
-        nutriscore_mapping = {'a': 5, 'b': 4, 'c': 3, 'd': 2, 'e': 1}
-        reverse_mapping = {v: k.upper() for k, v in nutriscore_mapping.items()}
-
-        df['nutriscore_mapped'] = df['nutriscore'].map(nutriscore_mapping)
-        average_nutriscore_numeric = round(df['nutriscore_mapped'].mean())
-        average_nutriscore_letter = reverse_mapping.get(average_nutriscore_numeric, "N/A")
-        products_below_c = df[df['nutriscore_mapped'] < 3].shape[0]
-
-        return average_nutriscore_letter, products_below_c
-    except Exception as e:
-        print(f"Error calculating Nutri-Score stats: {e}")
-
 
 def plot_nutriscore(df, filename=None):
     try:
